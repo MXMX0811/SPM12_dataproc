@@ -1,189 +1,87 @@
 # SPM12数据处理流程
 __Auther: [Mingxin Zhang](https://github.com/nkMengXin)__
+
 在MATLAB中输入spm fmri打开SPM。
 
 ## 一、数据准备：
-    SPM12使用.img/.hdr格式或.nii格式数据。这里使用nifti（.nii）格式。首先将要处理的*.dcm格式的数据转换为*.nii，可使用SPM的“DICOM Import”工具进行格式转换。在DICOM files中选择需要转换格式的.dcm文件，在Output directory中选择输出路径。输出图像格式为Single file（nii）NIfTI。点击运行。
+SPM12使用.img/.hdr格式或.nii格式数据。这里使用nifti（.nii）格式。首先将要处理的*.dcm格式的数据转换为*.nii，可使用SPM的“DICOM Import”工具进行格式转换。在DICOM files中选择需要转换格式的.dcm文件，在Output directory中选择输出路径。输出图像格式为Single file（nii）NIfTI。点击运行。
 
+## 二、预处理：
+为便于处理以及后续操作，以下将预处理与个体水平分析、组水平分析分开。SPM中可进行批处理操作，便于同时进行一系列处理步骤。点击Batch打开Batch Editor，这里先将预处理步骤存入一个Batch。
 
+### 1. Slice Timing（若实验设计为事件相关则需要进行，block设计跳过此步）:
+Slice Timing用于校正层与层之间扫描时间的差异。点击SPM - Temporal - Slice Timing添加步骤。
 
+双击Data，在Session中选择要输入的nifti文件。Number of Slices为层数（nifti文件为三维或四维图像，三维图像的维度表示了图像的尺寸，其中第三个维度即为此处需要的层数。四维图像由若干三维图像拼接而成，第四个维度为包含的三维图像的数量，即为序列时间），TR为扫描的时间间隔（s），TA由TA=TR-(TR/nslices)计算而得。以上参数由原始数据的头文件（其中存有各种参数）获得。可使用mricron打开图像后点击Window – Information得（如图），若安装了MRtrix也可输入命令mrinfo xxx.nii得到数据信息。
 
-![](https://github.com/nkMengXin/ROS_project_restaurant/raw/master/A2EEFCC228E3F8F6F3BA90471DA6E8BF.png)
+Slice order为扫描顺序。一般使用顺序扫描或间隔扫描。顺序扫描即为逐层扫描，从第一层依次扫至最后一层，例如图中数据为74×74×48，共有48层，因此此处填写1:48。若为间隔扫描即为先单数层再双数层，因此填写1:2:48 2:2:48。具体扫描顺序由数据采集时的情况决定。一般来说，如果图像获取是隔层进行的，则要先Slice Timing再进行Realign，如果图像各层是连续获取的，则要先进行Realign再做Slice Timing。Reference Slice为参考层，选择中间一层，即nslice/2。
+可修改Prefix（输出文件的前缀，默认Slice Timing前缀为a）。
 
-* Based on the [Baidu API](https://cloud.baidu.com/product/body), can recognize the key points of human body(like wrists, nose and neck).
+### 2. 头动校正
+点击SPM – Spatial – Realign - Realign (Est & Res)。此步为了校正扫描过程中头部的移动造成的影响。
 
-* Based on the [darknet_ros](https://github.com/leggedrobotics/darknet_ros) package, can achieve the Real-Time Object Detection.
+双击Data，点击Session，点击Dependency可选择前面步骤生成的数据（如果前面有步骤的话），选择“Slice Timing: Slice Timing Corr. Images (Sess 1)”。这样的话，这一步的输入数据即为上一步Slice Timing的结果。如果没有做Slice Timing，则在Session中选择原始的nifti数据。
 
-* The tuetlebot's navigation is based on the package `rchomeedu_navigation`.
+在Resliced images中的Reslice Options中选择All Images + Mean Image，运行后生成r开头的文件（校正过的每帧图像）和一个mean开头的文件（所有图像的平均）。此外还会生成一个文本文件，其中时整个时间序列内的头动参数，一般为6参数，即为位置和转动。
 
-* The robotic arm's catching is based on the package `rchomeedu_arm`.
+### 3. Normalise：
+点击SPM – Spatial – Normalise - Normalise (Estimate & Write)。这一步为的是将所有功能像对齐到同一个标准空间。
 
-* The voice interaction is based on `xfei_asr`.
+双击Data新建Subject。点击Dependency选择前面生成的结果：在Image to Align中选择“Realign: Estimate & Reslice: Mean Image”；在Images to Write中选择“Realign: Estimate & Reslice: Resliced Images (Sess 1)”。
 
-## main.py
-`main.py` is used to control and manage all of the functions of the robot. Because the ROS nodes are parallel, so we can use wait_for_message() to block the process of the programme and then publish some messages to it to let it countinue. The function is used like this:
+在Writing Options中修改体素大小Voxel Size。本例为[3  3  3]（由原始数据体素大小决定，也可从mricron中查看information获取或利用mrinfo）。其余参数保持默认。
 
-    rospy.wait_for_message('topic name', type)
+### 4. Smooth：
+点击SPM – Spatial – Smooth。
 
-It will initiate a subscriber, and when the message is received, destroy the subscriber.
+Images to Smooth中选择”Normalise: Estimate & Write: Normalised Images (Subj 1)”。
 
-First, `main.py` will wait for message from node `body_pose`. If the customer's waving is detected, the robot will say "Yes, I'm coming". If there's nobody in the visual field, the robot will turn itself to find people who is waving. And then `main.py` will publish a message to `find_people` to start the process of finding people. This process has some pause because of the delay of the Baidu API. So the robot may not drive smoothly.
+FWHM：设为[6  6  6]（即为体素大小的二倍）。
 
-When the robot is close to the customer, the robot will save its location and publish it to the topic `start_pos`. The robot will ask the customer "Hello! What would you like to have? Coffee or tea?" And then if "coffee" or "tea" is in the customer's answer, the robot will say "Yes, I'll bring you a cup of coffee/tea".
+至此，数据预处理的步骤已经完成，可将此Batch保存以备重复使用。点击绿色箭头可运行Batch。这样就会依次生成以上各步骤的结果文件。最终结果前缀为swr（若进行了Slice Timing则前缀为swra）。另外，Batch还可以保存为MATLAB脚本，以便于进行更多的操作。
 
-When the robot get which drink to bring, the navigation will start. Robot will drive to the fixed location and then use Kinect and `darknet_ros` to get the information (kind and depth) of the thing to catch. When the adjustment is finished, the arm will start to catch. Then the robot will drive to the customer back and say "'Here is your coffee/tea. Enjoy yourself" and raise up the drink to the customer.
+点击File – Save Batch and Script即可保存脚本。保存结果为两个.m文件，_job后缀文件内是各步骤参数，运行另一个文件可运行Batch。可以在脚本内修改输入文件等参数实现数据的批量处理。
 
-## Voice interaction
-Robot can publish the text to the `soundplay_node` to speak out the content.
+## 三、个体水平统计：
+新建一个Batch。以下步骤为对每个个体进行分析。
 
-    def talk(text):
-        pub = rospy.Publisher('speech', String, queue_size=10)
-        time.sleep(0.1)
-        #rospy.loginfo(text)
-        pub.publish(text) 
-        
-`text2speech.py` subscribes the topic `speech`. In the subscriber's callback function:
+### 1. fMRI model specification:
+点击SPM – Stats – fMRI model specification。在Directory中选择输出位置（输出一SPM.mat文件）。
 
-    def callback(data):
-        pub = rospy.Publisher('speak_finish', String, queue_size=10)
-        rospy.loginfo(data.data)
-        soundhandle = SoundClient()
-        rospy.sleep(1)
-        text = data.data
-        voice = 'voice_kal_diphone'
-        volume = 1.0
-        print 'Saying: %s' % text
-        print 'Voice: %s' % voice
-        print 'Volume: %s' % volume
-        soundhandle.say(text, voice, volume)
-        rospy.sleep(7)
-        pub.publish('finish')
-        
-Use `xfei_asr` package to recognize the content of customer's answer. You should edit the `.cpp` before your using. You should change the sign up an account on the platform of xunfei and download the SDK. You should put the `libmsc.so` into `/catkin_ws/src/xfei_asr/lib`. And then subcribe the topic `xfwords`, and then can get the string of the words. You can write a subcriber like this:
+Units for design决定Condition中时间单位，是时间点或者秒。若以扫描的时间点（即次数）作为时间单位则选择Scans，若以秒作为单位则选择Seconds。Interscan interval即为TR，本例中为0.75。
 
-    def listener_callback(data):
-        global feed_back
-        #rospy.loginfo(data.data)
-        feed_back = data.data
+新建Subject/Session，在Scans中选择完成预处理的文件。
 
+Conditions为任务条件，即为block设计中的各组块。实验设计中有几种状态就建立几个Condition。点击Conditions – New: Condition新建Condition。本例中只有做任务与否的两个状态，因此建立两个Condition。
 
-    def listener():
-        rospy.Subscriber('xfwords', String, listener_callback)
-        
-## Detection of the Body Key Point
-The file format that Baidu API requests is Binary File. So the screen captured by the OpenCV must be transformed into binary file.
+在Name中输入状态的名称。Onsets代表该状态的启动时间，Durations为该状态的持续时间（若是事件相关设计此处填0）。注意单位应与Units for design一致。本例为组块设计，两状态交替进行，各持续30s，TR为0.75s。任务态先开始，因此任务态Onsets为[1  81  161  241  321  401  481  561]，不做任务的Onsets为[41  121  201  281  361  441  521  601]，两个Condition的Durations都为40（以Scans为单位）。若Units for design选择Seconds，则任务态Onsets为[1 61 121 ……]以此类推，Durations都为30。
 
-    ret, frame = cap.read()
-    img_encode = cv2.imencode('.jpg', frame)[1]
-    image = base64.b64encode(img_encode)
-    image64 = str(image)
-    image_type = "BASE64"
-    params = {'image': image64,'image_type':"BASE64"}
-    params = urlencode(params).encode("utf-8")
-            
-You may [sign up an account](http://ai.baidu.com/?track=cp:aipinzhuan|pf:pc|pp:AIpingtai|pu:title|ci:|kw:10005792) and then get `access_token` by this way:
+Multiple regressors选择前面的头动参数文件，即rp开头的txt文件。
 
-    curl -i -k 'https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=（This is API Key）&client_secret=（This is Secret Key）'
-   
-The access_token should be updated by month.
+### 2. Estimate:
+点击SPM – Stats – Model estimation。选择Select SPM.mat，点击Dependency，选中”fMRI model specification: SPM.mat File”。
 
-    request_url = "https://aip.baidubce.com/rest/2.0/image-classify/v1/body_analysis"
-    access_token = '[24.cb4ed767145d6bc628ca085d6ea3f3d3.2592000.1561474761.282335-16350696]'
-    request_url = request_url + "?access_token=" + access_token
-    request = urllib2.urlopen(url=request_url, data=params)
-    
-It may spend about 1s to get the result. The returned information's form is similar to `json`. You can use this method to change it into json:
+### 3. Contrast Manager：
+点击SPM – Stats – Contrast Manager。选择Select SPM.mat，点击Dependency，选中”Model estimation: SPM.mat File”。
+新建T-contrast。
 
-    content = request.read()  
-    result = str(content)
-    res = json.loads(result)
-    
-In `res['person_num']` is the number of the people, and each person's information is in `res['person_info']`. You can get the first person's key points postions in `res['person_info'][0]['body_parts']`. You can use OpenCV draw some points and lines to mark the positions on the screen.
+根据任务进行顺序依次排列Weights vector：如第一段状态为1，第二段[0  1]，第三段[0  0  1]，以此类推。本例中有两个状态，两个状态分别为1与[0 1]。
+若有加减运算则将要操作的两个Weights vector互作加减，例如任务态先开始则为1。
 
+不做任务的状态在任务态之后为[0  1]，TASK-REST则为[1  0]与[0  1]相减得[1 -1]。
 
-![](https://github.com/nkMengXin/ROS_project_restaurant/raw/master/body_pose.png)
+点击“Save Batch and Script”，得到个体水平统计的Batch脚本。运行脚本后，在SPM菜单点击Results，选中每个个体生成的SPM.mat。选中一个contrast，点击Done
+apply masking选择none，p value选择FWE，使用默认的值0.05，& extent threshold {voxels} 使用默认值0。
 
-Get the average of the postion of hip and neck as the y_error and x_error.
+在Graphics中可查看结果。在Display中点击overlays...选择sections，选择标准脑模板可将结果标注在标准脑上。
+也可在其他结果统计软件中如DPABI或Restplus中查看spmT00x.nii（x为contrast的序号，spmT001即为第一个Contrast），选择其他统计方法（如GRF）得到激活区域。
 
-    body_height = ((jo.dic['right_hip']['y'] + jo.dic['left_hip']['y']) / 2 + jo.dic['neck']['y']) / 2
-    pub_height.publish(str(body_height))
+## 四、组水平分析：
+点击Specify 2nd-level。在Directory中选择组分析的结果输出目录。Design选择默认，One-sample t-test。在Scans中选择想要分析的Contrast在个体水平分析的结果。例如，想要得到个体水平分析时第一个contrast在组水平的结果，就在Scans中选择所有个体的con_0001.nii。本例中共有20个个体，想要分析TASK-REST的组水平结果，TASK-NAVI在个体水平分析时是第三个Contrast，因此选择20个个体各自的con_0003.nii。
 
-    body_error = (((jo.dic['right_hip']['x'] + jo.dic['left_hip']['x']) / 2) + jo.dic['neck']['x']) / 2
-    pub_x_error.publish(str(body_error))
+Estimation与个体水平分析相同，添加此步骤，点击Select SPM.mat，点击Dependency选择“Factorial design specification: SPM.mat File”（上一步的结果）。
+点击SPM – Stats – Contrast Manager。选择Select SPM.mat，点击Dependency，选中”Model estimation: SPM.mat File”。新建T-contrast，填写Name，Weights matrix填入1。
 
-`find_people` will use these error to drive to customer. With these error, `find_people` can adjust the posture of robot by sending messages of velocity to topic `/cmd_vel_mux/input/navi`.
+组水平分析步骤完成，保存脚本运行，得到组水平分析结果。查看组水平分析结果并得到激活区域的方法与个体水平相同。
 
-## Object recognizing and catching
-`darknet_ros` is a ROS package developed for object detection in camera images. 
-
-![](https://github.com/leggedrobotics/darknet_ros/blob/master/darknet_ros/doc/test_detection.png)  
-
-In file `/catkin_ws/src/Myrobot/src/restautant/tuning_control.py` you can get the position of the target object by `darknet_ros`. And then you can use Kinect to get the depth information of the target area. With the position and depth information of target area, robot can drive to the correct location and ready to catch the target object.
-
-![](https://github.com/nkMengXin/ROS_project_restaurant/raw/master/psb.jpeg)  
-
-After the robot adjusts to the correct posture, the arm will catch the targrt object.
-
-![](https://github.com/nkMengXin/ROS_project_restaurant/raw/master/FDC24020C5CE54560CCB993B4038F8A7.png)
-
-
-## Navigation
-In the file `catkin_ws/src/rc-home-edu-learn-ros/rchomeedu_navigation/scripts/my_navigation.py` is the process of the navigation between the fixed location and the customer's location which received from the node `find_people`. 
-
-    def get_start_pose(self, start_pose):
-      global A_x, A_y, A_theta
-      pose = start_pose.data.split(',')
-      A_x = float(pose[0])
-      A_y = float(pose[1])
-      A_theta = float(pose[2])
-
-The `function get_start_pose` will be called when this is executed:
-
-    rospy.Subscriber('start_pos', String, self.get_start_pose)
-
-The location of the customer will be saved as A_x, A_y and A_theta. These will be transformed into quaternion and then sent to movebase.
-
-The robot will go to the fixed location (saved as B) when:
-
-    if start == 1:
-        pub = rospy.Publisher('catch_start', String, queue_size=10)
-        rospy.loginfo("Going to point B")
-        rospy.sleep(2)
-        self.goal.target_pose.pose = locations['B']
-        self.move_base.send_goal(self.goal)
-        waiting = self.move_base.wait_for_result(rospy.Duration(300))
-        if waiting == 1:
-            rospy.loginfo("Reached point B")
-            rospy.sleep(2)
-            rospy.loginfo("Ready to go back")
-            rospy.sleep(2)
-            global start
-            start = 0
-            pub.publish('ready_to_catch') 	#publish message to the node used to control the catching
-            rospy.wait_for_message('arm2navi', String)	#countinue when the catching finish
-
-And when the catching process finish, the robot will go back to A. This part of code is similar to above. And then this node will publish a message that tells the arm should raise the drink to the customer.
-
-## launch
-To run this project, you should run this `roslaunch turtlebot_bringup minimal.launch` to bring up turtlebot after you connect your computer to turtlebot. And then run `roslaunch Myrobot restaurant.launch` to start. You may Click on the map to initiate the pose.
-
-The `roslaunch Myrobot restaurant.launch` is like this:
-
-    <!-- -*- mode: XML -*- -->
-
-    <launch>
-        <node pkg="sound_play" type="soundplay_node.py" name="sound_play" />
-        <node pkg="Myrobot" type="main.py" name="main" launch-prefix="gnome-terminal -e"/>
-        <node pkg="Myrobot" type="text2speech.py" name="say" />
-        <node pkg="Myrobot" type="body_pose.py" name="body_pose"/>
-        <node pkg="Myrobot" type="find_people.py" name="find_people" launch-prefix="gnome-terminal -e"/>
-        <node pkg="Myrobot" type="tuning_control.py" name="catch_object" launch-prefix="gnome-terminal -e"/>
-        <node pkg="xfei_asr" type="iat_publish_speak" name="iat_publish_speak" launch-prefix="gnome-terminal -e"/>
-        <node pkg="rchomeedu_arm" type="catch.py" name="catch" />
-
-        <include file="$(find rchomeedu_navigation)/launch/navigation.launch"/>
-        <include file="$(find turtlebot_navigation)/launch/amcl_demo.launch" />
-        <include file="$(find turtlebot_rviz_launchers)/launch/view_navigation.launch" />
-        <include file="$(find darknet_ros)/launch/yolo_v3.launch" />
-        <include file="$(find rchomeedu_arm)/launch/arm.launch"/>
-    </launch>
+以上为SPM12进行数据处理的基本流程，步骤或许与其他教程有出入，还需要根据任务以及实验设计具体情况而定。
