@@ -1,11 +1,12 @@
 # SPM12数据处理流程
+__Auther: [Mingxin Zhang](https://github.com/nkMengXin)__
 在MATLAB中输入spm fmri打开SPM。
 
 ## 一、数据准备：
-SPM12使用.img/.hdr格式或.nii格式数据。这里使用nifti（.nii）格式。首先将要处理的*.dcm格式的数据转换为*.nii，可使用SPM的“DICOM Import”工具进行格式转换。在DICOM files中选择需要转换格式的.dcm文件，在Output directory中选择输出路径。输出图像格式为Single file（nii）NIfTI。点击运行。
+    SPM12使用.img/.hdr格式或.nii格式数据。这里使用nifti（.nii）格式。首先将要处理的*.dcm格式的数据转换为*.nii，可使用SPM的“DICOM Import”工具进行格式转换。在DICOM files中选择需要转换格式的.dcm文件，在Output directory中选择输出路径。输出图像格式为Single file（nii）NIfTI。点击运行。
 
 
-__Auther: [Zhang Mingxin](https://github.com/nkMengXin), 1611260__
+
 
 ![](https://github.com/nkMengXin/ROS_project_restaurant/raw/master/A2EEFCC228E3F8F6F3BA90471DA6E8BF.png)
 
