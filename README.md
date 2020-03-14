@@ -29,7 +29,7 @@ Slice order为扫描顺序。一般使用顺序扫描或间隔扫描。顺序扫
 
 双击Data新建Subject。点击Dependency选择前面生成的结果：在Image to Align中选择“Realign: Estimate & Reslice: Mean Image”；在Images to Write中选择“Realign: Estimate & Reslice: Resliced Images (Sess 1)”。
 
-在Writing Options中修改体素大小Voxel Size。本例为[3  3  3]（由原始数据体素大小决定，也可从mricron中查看information获取或利用mrinfo）。其余参数保持默认。
+在Writing Options中修改体素大小Voxel Size。本例为[3  3  3]（改为3×3×3后图像大小成为61×73×61）。其余参数保持默认。
 
 ### 4. Smooth：
 点击SPM – Spatial – Smooth。
