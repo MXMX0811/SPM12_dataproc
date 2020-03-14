@@ -24,14 +24,23 @@ Slice order为扫描顺序。一般使用顺序扫描或间隔扫描。顺序扫
 
 在Resliced images中的Reslice Options中选择All Images + Mean Image，运行后生成r开头的文件（校正过的每帧图像）和一个mean开头的文件（所有图像的平均）。此外还会生成一个文本文件，其中时整个时间序列内的头动参数，一般为6参数，即为位置和转动。
 
-### 3. Normalise：
+### 3. 配准
+选择Coregister（Estimate）。这一步是为了将功能像与结构像对准。
+
+点击Dependency选择前面生成的结果：在参考像中选择“Realign: Estimate & Reslice: Mean Image”；在source中选择T1结构像。
+
+
+### 4. Normalise：
 点击SPM – Spatial – Normalise - Normalise (Estimate & Write)。这一步为的是将所有功能像对齐到同一个标准空间。
 
-双击Data新建Subject。点击Dependency选择前面生成的结果：在Image to Align中选择“Realign: Estimate & Reslice: Mean Image”；在Images to Write中选择“Realign: Estimate & Reslice: Resliced Images (Sess 1)”。
+双击Data新建Subject。点击Dependency选择前面生成的结果：在Image to Align中选择“Coregister: Estimate: Coregistered Images”；在Images to Write中选择“Realign: Estimate & Reslice: Resliced Images (Sess 1)”。
 
-在Writing Options中修改体素大小Voxel Size。本例为[3  3  3]（改为3×3×3后图像大小成为61×73×61）。其余参数保持默认。
+在Writing Options中修改体素大小Voxel Size。本例为[3  3  3]（改为3×3×3后图像大小成为61×73×61）。
 
-### 4. Smooth：
+Bounding Box根据图像大小更改。默认尺寸一般偏小，一般使用[-90 -126 -72 
+90 90 108]。
+
+### 5. Smooth：
 点击SPM – Spatial – Smooth。
 
 Images to Smooth中选择”Normalise: Estimate & Write: Normalised Images (Subj 1)”。
